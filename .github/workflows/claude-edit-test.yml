@@ -1,0 +1,99 @@
+name: Claude Edit Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Texto a agregar al final de test.txt"
+        required: true
+        default: "Linea anadida por GitHub Actions"
+
+permissions:
+  contents: write
+
+jobs:
+  claude-edit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install anthropic
+
+      - name: Call Claude API to edit test.txt
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          USER_PROMPT: ${{ github.event.inputs.prompt }}
+        run: |
+          cat > edit_file.py << 'EOF'
+          import os
+          from datetime import datetime
+
+          from anthropic import Anthropic
+
+
+          api_key = os.environ.get("CLAUDE_API_KEY", "").strip()
+          if not api_key:
+              raise RuntimeError("CLAUDE_API_KEY no esta configurada en Secrets del repo.")
+
+          prompt_text = os.environ.get("USER_PROMPT", "Linea anadida por GitHub Actions").strip()
+          timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+          with open("test.txt", "r", encoding="utf-8") as f:
+              current_content = f.read()
+
+          client = Anthropic(api_key=api_key)
+
+          message = client.messages.create(
+              model="claude-3-5-sonnet-20241022",
+              max_tokens=1024,
+              messages=[
+                  {
+                      "role": "user",
+                      "content": (
+                          "Contenido actual de test.txt:\n\n"
+                          f"{current_content}\n\n"
+                          "Tarea: agrega exactamente una nueva linea al final con este texto: "
+                          f"\"{prompt_text} - {timestamp}\"\n"
+                          "Responde solo con el contenido completo del archivo actualizado."
+                      ),
+                  }
+              ],
+          )
+
+          new_content = message.content[0].text
+          if not new_content.endswith("\n"):
+              new_content += "\n"
+
+          with open("test.txt", "w", encoding="utf-8") as f:
+              f.write(new_content)
+
+          print("Archivo actualizado por Claude")
+          EOF
+
+          python edit_file.py
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- test.txt; then
+            echo "No hubo cambios en test.txt"
+            exit 0
+          fi
+
+          git add test.txt
+          git commit -m "Automated: Claude updated test.txt"
+          git push

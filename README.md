@@ -107,3 +107,23 @@ Payload esperado:
 
 Si este workflow falla por 403, entonces el bloqueo esta en permisos de
 `GITHUB_TOKEN` a nivel repo/org (no en la logica del flujo).
+
+## Claude API paso a paso
+
+Para usar el workflow [Claude Edit Test](.github/workflows/claude-edit-test.yml):
+
+1. Crear API key en Anthropic.
+2. Ir a GitHub repo -> Settings -> Secrets and variables -> Actions.
+3. Click en `New repository secret`.
+4. Name: `CLAUDE_API_KEY`.
+5. Value: pega tu API key de Anthropic.
+6. Guardar.
+7. Ir a Actions -> `Claude Edit Test` -> `Run workflow`.
+8. Completar `prompt` (ej: `Linea de prueba desde rutina`).
+9. Ejecutar y verificar que cree commit actualizando [test.txt](test.txt).
+
+Si ejecutas un workflow y no ves cambios locales, sincroniza:
+
+```powershell
+git pull --rebase origin main
+```
