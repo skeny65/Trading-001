@@ -1,0 +1,72 @@
+name: Routine Result To test.txt
+
+on:
+  workflow_dispatch:
+    inputs:
+      result:
+        description: "Resultado de la rutina"
+        required: true
+        default: "status=no_signal"
+      source:
+        description: "Origen (ej. claude-routine)"
+        required: true
+        default: "manual-dispatch"
+  repository_dispatch:
+    types: [routine_result]
+
+permissions:
+  contents: write
+
+jobs:
+  append-result:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolver payload
+        id: payload
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "result=${{ github.event.inputs.result }}" >> "$GITHUB_OUTPUT"
+            echo "source=${{ github.event.inputs.source }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=${{ github.event.client_payload.result }}" >> "$GITHUB_OUTPUT"
+            echo "source=${{ github.event.client_payload.source }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Append en test.txt
+        shell: bash
+        run: |
+          TS="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          SRC="${{ steps.payload.outputs.source }}"
+          RES="${{ steps.payload.outputs.result }}"
+
+          if [ -z "$RES" ]; then
+            RES="status=empty_result"
+          fi
+
+          if [ -z "$SRC" ]; then
+            SRC="unknown-source"
+          fi
+
+          echo "[$TS] source=$SRC result=$RES" >> test.txt
+
+      - name: Commit y push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- test.txt; then
+            echo "No hubo cambios en test.txt"
+            exit 0
+          fi
+
+          git add test.txt
+          git commit -m "routine: append result to test.txt"
+          git push

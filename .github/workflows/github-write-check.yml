@@ -1,0 +1,42 @@
+name: GitHub Write Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch objetivo para prueba/push"
+        required: true
+        default: "main"
+      perform_push:
+        description: "Intentar push real con backoff"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-and-push:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Diagnosticar permisos de lectura/escritura
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\diagnose-github-write.ps1 -Remote origin
+
+      - name: Push con backoff (opcional)
+        if: ${{ github.event.inputs.perform_push == 'true' }}
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\scripts\push-with-backoff.ps1 -Remote origin -Branch "${{ github.event.inputs.branch }}" -MaxRetries 4 -InitialDelaySeconds 2 -SetUpstream
